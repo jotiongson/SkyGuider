@@ -1,2 +1,2 @@
 # SkyGuider
-Locate an object in our skies
+Locate objects in our skies
