@@ -3,69 +3,69 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>SkyGuider AR</title>
+  <title>SkyGuider Planetarium</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body, html {
       margin: 0; padding: 0; width: 100%; height: 100%;
-      overflow: hidden; background-color: #000;
+      overflow: hidden; background-color: #050814; /* Deep space navy */
       font-family: system-ui, -apple-system, sans-serif;
     }
-    #camera-preview {
+    #sky-canvas {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      object-fit: cover; z-index: 1;
+      z-index: 1; pointer-events: none;
     }
-    #ar-canvas {
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      z-index: 2; pointer-events: none;
-    }
-    /* Minimalist floating UI */
     .floating-ui {
-      z-index: 3; pointer-events: auto;
+      z-index: 2; pointer-events: auto;
     }
   </style>
 </head>
 <body class="relative flex flex-col h-full select-none text-slate-100">
 
-  <video id="camera-preview" autoplay playsinline muted class="opacity-80"></video>
+  <canvas id="sky-canvas"></canvas>
 
-  <canvas id="ar-canvas"></canvas>
-
-  <div id="permission-btn" class="floating-ui hidden absolute top-10 left-1/2 transform -translate-x-1/2 bg-amber-500 text-black font-bold px-6 py-3 rounded-full shadow-lg text-sm cursor-pointer">
-    Tap to Calibrate Compass
+  <div id="permission-btn" class="floating-ui hidden absolute top-10 left-1/2 transform -translate-x-1/2 bg-amber-500 text-black font-bold px-6 py-3 rounded-full shadow-lg text-sm cursor-pointer hover:scale-105 transition">
+    Tap to Activate Sensors
   </div>
 
-  <div class="floating-ui absolute bottom-8 left-0 right-0 flex justify-center">
-    <button id="target-selector" class="bg-slate-950/80 border border-amber-500/40 hover:border-amber-500 active:scale-95 transition-all px-6 py-3 rounded-full backdrop-blur-md shadow-2xl flex items-center gap-3">
-      <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Searching:</span>
+  <div class="floating-ui absolute bottom-8 left-0 right-0 flex justify-center px-4">
+    <button id="target-selector" class="bg-slate-950/90 border border-slate-800 hover:border-amber-500/50 active:scale-95 transition-all px-6 py-3 rounded-full backdrop-blur-md shadow-2xl flex items-center gap-3">
+      <span class="text-xs font-bold text-slate-500 uppercase tracking-widest hidden sm:inline">Tracking:</span>
       <span id="active-target-text" class="text-amber-500 text-lg font-black tracking-wide">The Moon</span>
-      <svg class="w-5 h-5 text-amber-500/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg class="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
       </svg>
     </button>
   </div>
 
   <script>
-    // --- 1. CATALOG ---
+    // --- 1. ASTRONOMICAL CATALOG ---
     const CATALOG = [
-      { id: 'moon', name: 'The Moon', ra: 14.5, dec: -15.0, mag: -12.0, color: '#ffffff' },
-      { id: 'polaris', name: 'Polaris', ra: 2.53, dec: 89.26, mag: 2.0, color: '#ffffcc' },
-      { id: 'sirius', name: 'Sirius', ra: 6.75, dec: -16.71, mag: -1.46, color: '#a3c2ff' },
-      { id: 'betelgeuse', name: 'Betelgeuse', ra: 5.91, dec: 7.4, mag: 0.5, color: '#ffb380' },
-      { id: 'rigel', name: 'Rigel', ra: 5.24, dec: -8.2, mag: 0.12, color: '#80d4ff' }
+      { id: 'moon', name: 'The Moon', ra: 14.5, dec: -15.0, mag: -12.0, color: '#ffffff', size: 12 },
+      { id: 'polaris', name: 'Polaris', ra: 2.53, dec: 89.26, mag: 2.0, color: '#ffffcc', size: 5 },
+      { id: 'sirius', name: 'Sirius', ra: 6.75, dec: -16.71, mag: -1.46, color: '#a3c2ff', size: 7 },
+      { id: 'betelgeuse', name: 'Betelgeuse', ra: 5.91, dec: 7.4, mag: 0.5, color: '#ffb380', size: 6 },
+      { id: 'rigel', name: 'Rigel', ra: 5.24, dec: -8.2, mag: 0.12, color: '#80d4ff', size: 6 }
     ];
+
+    // Generate 300 random background stars for the planetarium effect
+    const BG_STARS = Array.from({length: 300}, () => ({
+      ra: Math.random() * 24,
+      dec: (Math.random() * 180) - 90,
+      size: Math.random() * 1.5 + 0.5,
+      opacity: Math.random() * 0.5 + 0.1
+    }));
 
     const locationCoords = { lat: 33.9636, lon: -117.5640 }; 
     let activeIndex = 0;
     
     // Hardware sensors
     let rawOrientation = { azimuth: 180, altitude: 0 };
-    // Smoothed sensors for rendering
+    // Smoothed sensors for rendering (Shock Absorber)
     let smoothOrientation = { azimuth: 180, altitude: 0 };
 
-    const canvas = document.getElementById('ar-canvas');
+    const canvas = document.getElementById('sky-canvas');
     const ctx = canvas.getContext('2d');
-    const video = document.getElementById('camera-preview');
 
     function resizeCanvas() {
       canvas.width = window.innerWidth;
@@ -74,7 +74,7 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
-    // --- 2. ASTRO MATH ---
+    // --- 2. ASTRO MATH ENGINE ---
     const MathEngine = {
       rad: (deg) => deg * (Math.PI / 180),
       deg: (rad) => rad * (180 / Math.PI),
@@ -101,7 +101,6 @@
       }
     };
 
-    // --- 3. SENSOR SMOOTHING (SHOCK ABSORBER) ---
     // Short-path angular interpolation to prevent spinning wraps
     function lerpAngle(start, end, amt) {
       let diff = end - start;
@@ -113,19 +112,7 @@
       return (1 - amt) * start + amt * end;
     }
 
-    // --- 4. CAMERA & PERMISSIONS ---
-    async function startCamera() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } }, audio: false });
-        video.srcObject = stream;
-      } catch (err) {
-        try {
-          const fallback = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-          video.srcObject = fallback;
-        } catch (e) { console.warn("Camera blocked."); }
-      }
-    }
-
+    // --- 3. SENSOR PERMISSIONS ---
     function setupOrientation() {
       if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
         const permBtn = document.getElementById('permission-btn');
@@ -148,11 +135,16 @@
       rawOrientation.altitude = Math.max(-90, Math.min(90, 90 - e.beta));
     }
 
-    // --- 5. MINIMALIST RENDER ENGINE ---
+    // --- 4. RENDER ENGINE ---
     function animate() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // Create deep space background
+      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      gradient.addColorStop(0, '#02040a');
+      gradient.addColorStop(1, '#0f172a');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Apply smoothing physics to the raw sensor data
+      // Apply smoothing physics
       smoothOrientation.azimuth = lerpAngle(smoothOrientation.azimuth, rawOrientation.azimuth, 0.08);
       smoothOrientation.altitude = lerp(smoothOrientation.altitude, rawOrientation.altitude, 0.08);
 
@@ -160,54 +152,88 @@
       const cy = canvas.height / 2;
       const fov = 60;
       const pxPerDeg = canvas.width / fov;
+
+      // Project function for mapping coordinates to screen
+      const projectToScreen = (ra, dec) => {
+        const { altitude, azimuth } = MathEngine.getAltAz(ra, dec, locationCoords.lat, locationCoords.lon);
+        let dAz = azimuth - smoothOrientation.azimuth;
+        if (dAz > 180) dAz -= 360;
+        if (dAz < -180) dAz += 360;
+        const dAlt = altitude - smoothOrientation.altitude;
+        
+        const ptX = cx + (dAz * pxPerDeg);
+        const ptY = cy - (dAlt * pxPerDeg);
+        const onScreen = (ptX > -50 && ptX < canvas.width + 50 && ptY > -50 && ptY < canvas.height + 50);
+        return { ptX, ptY, onScreen };
+      };
+
+      // Draw Background Stars
+      BG_STARS.forEach(star => {
+        const { ptX, ptY, onScreen } = projectToScreen(star.ra, star.dec);
+        if (onScreen) {
+          ctx.beginPath();
+          ctx.arc(ptX, ptY, star.size, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255, 255, 255, ${star.opacity})`;
+          ctx.fill();
+        }
+      });
+
+      // Draw Main Catalog Targets
       const activeTarget = CATALOG[activeIndex];
       let targetOnScreen = false;
+      let activePtX = 0, activePtY = 0;
 
-      const { altitude, azimuth } = MathEngine.getAltAz(activeTarget.ra, activeTarget.dec, locationCoords.lat, locationCoords.lon);
-      
-      let dAz = azimuth - smoothOrientation.azimuth;
-      if (dAz > 180) dAz -= 360;
-      if (dAz < -180) dAz += 360;
-      const dAlt = altitude - smoothOrientation.altitude;
+      CATALOG.forEach((obj, idx) => {
+        const { ptX, ptY, onScreen } = projectToScreen(obj.ra, obj.dec);
+        const isCurrent = idx === activeIndex;
 
-      const ptX = cx + (dAz * pxPerDeg);
-      const ptY = cy - (dAlt * pxPerDeg);
-      const onScreen = (ptX > -50 && ptX < canvas.width + 50 && ptY > -50 && ptY < canvas.height + 50);
+        if (onScreen) {
+          if (isCurrent) {
+            targetOnScreen = true;
+            activePtX = ptX;
+            activePtY = ptY;
+            
+            // Reticle
+            ctx.beginPath();
+            ctx.arc(ptX, ptY, 40, 0, Math.PI * 2);
+            ctx.strokeStyle = '#22c55e';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([8, 6]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
 
-      // Draw the Target
-      if (onScreen) {
-        targetOnScreen = true;
-        
-        // Circular Reticle Target
-        ctx.beginPath();
-        ctx.arc(ptX, ptY, 40, 0, Math.PI * 2);
-        ctx.strokeStyle = '#22c55e';
-        ctx.lineWidth = 3;
-        ctx.setLineDash([10, 8]);
-        ctx.stroke();
-        ctx.setLineDash([]);
+          // Celestial Body
+          ctx.beginPath();
+          ctx.arc(ptX, ptY, obj.size, 0, Math.PI * 2);
+          ctx.fillStyle = obj.color;
+          ctx.shadowColor = obj.color;
+          ctx.shadowBlur = 15;
+          ctx.fill();
+          ctx.shadowBlur = 0;
 
-        // Core Dot
-        ctx.beginPath();
-        ctx.arc(ptX, ptY, 4, 0, Math.PI * 2);
-        ctx.fillStyle = '#ffffff';
-        ctx.fill();
+          // Label
+          ctx.fillStyle = isCurrent ? '#22c55e' : '#64748b';
+          ctx.font = isCurrent ? 'bold 16px sans-serif' : '12px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(obj.name, ptX, ptY - (obj.size + 15));
+        } else if (isCurrent) {
+          activePtX = ptX;
+          activePtY = ptY;
+        }
+      });
 
-        // Target Name
-        ctx.fillStyle = '#22c55e';
-        ctx.font = 'bold 16px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(activeTarget.name + " LOCKED", ptX, ptY - 55);
-        
+      // UI States
+      if (targetOnScreen) {
         document.getElementById('active-target-text').className = "text-green-500 text-lg font-black tracking-wide";
+        document.getElementById('active-target-text').innerText = activeTarget.name + " [LOCKED]";
       } else {
         document.getElementById('active-target-text').className = "text-amber-500 text-lg font-black tracking-wide";
-      }
+        document.getElementById('active-target-text').innerText = activeTarget.name;
 
-      // Draw Guiding Arrow if off-screen
-      if (!targetOnScreen) {
-        const angle = Math.atan2(ptY - cy, ptX - cx);
-        const pad = Math.min(cx, cy) - 60; // Keep arrow safely inside screen edges
+        // Draw Guiding Arrow
+        const angle = Math.atan2(activePtY - cy, activePtX - cx);
+        const pad = Math.min(cx, cy) - 60;
         const arrowX = cx + Math.cos(angle) * pad;
         const arrowY = cy + Math.sin(angle) * pad;
 
@@ -216,13 +242,13 @@
         ctx.rotate(angle);
         ctx.beginPath();
         ctx.moveTo(25, 0);
-        ctx.lineTo(-20, -18);
-        ctx.lineTo(-8, 0);
-        ctx.lineTo(-20, 18);
+        ctx.lineTo(-15, -15);
+        ctx.lineTo(-5, 0);
+        ctx.lineTo(-15, 15);
         ctx.closePath();
-        ctx.fillStyle = '#f59e0b'; // Amber color
+        ctx.fillStyle = '#f59e0b';
         ctx.shadowColor = '#f59e0b';
-        ctx.shadowBlur = 15;
+        ctx.shadowBlur = 20;
         ctx.fill();
         ctx.restore();
       }
@@ -230,14 +256,13 @@
       requestAnimationFrame(animate);
     }
 
-    // --- 6. UI INTERACTION ---
+    // --- 5. INITIALIZATION ---
     document.getElementById('target-selector').addEventListener('click', () => {
       activeIndex = (activeIndex + 1) % CATALOG.length;
       document.getElementById('active-target-text').innerText = CATALOG[activeIndex].name;
     });
 
     window.onload = function() {
-      startCamera();
       setupOrientation();
       animate();
     }
